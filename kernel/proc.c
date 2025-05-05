@@ -201,7 +201,7 @@ proc_pagetable(struct proc *p)
 
   // map the trapframe page just below the trampoline page, for
   // trampoline.S.   
-  // pagetable是用户的proc，所以是用户态的虚拟地址
+  // pagetable是用户的proc，所以是用户态的虚拟地址。  p->trapframe是kalloc分出来的
   if(mappages(pagetable, TRAPFRAME, PGSIZE,
               (uint64)(p->trapframe), PTE_R | PTE_W) < 0){
     uvmunmap(pagetable, TRAMPOLINE, 1, 0);
@@ -471,12 +471,12 @@ scheduler(void)
         // to release its lock and then reacquire it
         // before jumping back to us.
         p->state = RUNNING;
-        c->proc = p;
-        swtch(&c->context, &p->context);
+        c->proc = p;  // 唯一给proc赋有效值的地方
+        swtch(&c->context, &p->context);  // 执行这个进程 , 将之前的寄存器存放到c->context
 
         // Process is done running for now.
         // It should have changed its p->state before coming back.
-        c->proc = 0;
+        c->proc = 0;  // 没太明白
         found = 1;
       }
       release(&p->lock);
@@ -484,7 +484,7 @@ scheduler(void)
     if(found == 0) {
       // nothing to run; stop running on this core until an interrupt.
       intr_on();
-      asm volatile("wfi");
+      asm volatile("wfi");  // 提示cpu可以进入低功耗状态
     }
   }
 }
@@ -500,19 +500,19 @@ void
 sched(void)
 {
   int intena;
-  struct proc *p = myproc();
+  struct proc *p = myproc();  // 获取当前的进程
 
-  if(!holding(&p->lock))
+  if(!holding(&p->lock))  // 判断当前cpu是否得到了这个进程
     panic("sched p->lock");
   if(mycpu()->noff != 1)
     panic("sched locks");
-  if(p->state == RUNNING)
-    panic("sched running");
-  if(intr_get())
+  if(p->state == RUNNING)  // 当前进程是runing状态
+    panic("sched running"); // 不应该调用sched？？
+  if(intr_get())  // 如果开启了中断
     panic("sched interruptible");
 
   intena = mycpu()->intena;
-  swtch(&p->context, &mycpu()->context);
+  swtch(&p->context, &mycpu()->context);  // 放弃当前的进程的执行，将寄存器存放在p->contexts // 执行上次的进程
   mycpu()->intena = intena;
 }
 

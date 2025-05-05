@@ -2,7 +2,7 @@
         # low-level code to handle traps from user space into
         # the kernel, and returns from kernel to user.
         #
-        # the kernel maps the page holding this code
+        # the kernel maps the page holding this code  
         # at the same virtual address (TRAMPOLINE)
         # in user and kernel space so that it continues
         # to work when it switches page tables.
@@ -10,8 +10,15 @@
         # a page boundary.
         #
 
+        # TRAMPOLINE 在内核态和用户态的虚拟地址一样，这样切换了页表也能工作
+
 #include "riscv.h"
 #include "memlayout.h"
+
+# uservec 就是将用户态的寄存器保存到p->trapframe,将页表切换到内核页表，然后跳转到usertrap函数执行
+# userret 就是将 用户态的寄存器还原，将页表切换到进程的用户态页表。然后模式返回到用户态
+
+# 由于这两段代码会在用户页和内核页表之间相互切换。所以 TRAMPOLINE在用户态和内核态的地址要一样，否则没法工作
 
 .section trampsec
 .globl trampoline
@@ -21,21 +28,21 @@ trampoline:
 .globl uservec
 uservec:    
 	#
-        # trap.c sets stvec to point here, so
-        # traps from user space start here,
+        # trap.c sets stvec to point here, so   将stvec（S模式下的trap处理程序的地址）设置为uservec
+        # traps from user space start here,     但是是S模式下用户态的页表
         # in supervisor mode, but with a
         # user page table.
         #
 
         # save user a0 in sscratch so
         # a0 can be used to get at TRAPFRAME.
-        csrw sscratch, a0
+        csrw sscratch, a0   # 先把a0 临时存放在sscratch寄存器. 后面要用a0传参
 
         # each process has a separate p->trapframe memory area,
         # but it's mapped to the same virtual address
         # (TRAPFRAME) in every process's user page table.
-        li a0, TRAPFRAME
-        
+        li a0, TRAPFRAME    # a0 指向 TRAPFRAME的地址
+        #  将用户态的寄存器 存在 trapframe中
         # save the user registers in TRAPFRAME
         sd ra, 40(a0)
         sd sp, 48(a0)
@@ -70,7 +77,9 @@ uservec:
 
 	# save the user a0 in p->trapframe->a0
         csrr t0, sscratch
-        sd t0, 112(a0)
+        sd t0, 112(a0)  # 给 trapfram的a0 赋值 之前a0存在sscratch中
+
+        # 用户态的寄存器前面都保存了  现在这些寄存器都可以随便使用了
 
         # initialize kernel stack pointer, from p->trapframe->kernel_sp
         ld sp, 8(a0)
@@ -86,16 +95,16 @@ uservec:
 
         # wait for any previous memory operations to complete, so that
         # they use the user page table.
-        sfence.vma zero, zero
+        sfence.vma zero, zero  # 等待内存操作完成
 
         # install the kernel page table.
-        csrw satp, t1
+        csrw satp, t1   # 切换到内核态的页表
 
         # flush now-stale user entries from the TLB.
         sfence.vma zero, zero
 
         # jump to usertrap(), which does not return
-        jr t0
+        jr t0   # t0寄存器指向 trapframe->kernel_trap  就是 usertrap。  无条件跳转到kernel_trap（usertrap）
 
 .globl userret
 userret:
@@ -106,12 +115,14 @@ userret:
 
         # switch to the user page table.
         sfence.vma zero, zero
-        csrw satp, a0
+
+        csrw satp, a0  #  usertrapret(void) 最后会调用((void (*)(uint64))trampoline_userret)(satp);  a0就是arg0 也是a0就是satp的值 就是进程的用户态页表地址
         sfence.vma zero, zero
 
-        li a0, TRAPFRAME
+        # TRAPFRAME 只作为内核态的虚拟地址
+        li a0, TRAPFRAME   # a0作为形参0用完后，在这里 指向内核态虚拟地址TRAPFRAME 这样下面的ld代码就可以换运哟工会图埃的寄存器了
 
-        # restore all but a0 from TRAPFRAME
+        # restore all but a0 from TRAPFRAME   # 恢复用户态的寄存器
         ld ra, 40(a0)
         ld sp, 48(a0)
         ld gp, 56(a0)
@@ -144,8 +155,8 @@ userret:
         ld t6, 280(a0)
 
 	# restore user a0
-        ld a0, 112(a0)
+        ld a0, 112(a0)   #  恢复用户态的a0
         
         # return to user mode and user pc.
-        # usertrapret() set up sstatus and sepc.
+        # usertrapret() set up sstatus and sepc.  # 返回到U模式 就是用户态
         sret

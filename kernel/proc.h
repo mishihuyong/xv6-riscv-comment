@@ -1,4 +1,5 @@
 // Saved registers for kernel context switches.
+// 这些寄存器就是函数调用要用到的寄存器
 struct context {
   uint64 ra;
   uint64 sp;
@@ -20,10 +21,10 @@ struct context {
 
 // Per-CPU state.
 struct cpu {
-  struct proc *proc;          // The process running on this cpu, or null.
-  struct context context;     // swtch() here to enter scheduler().
-  int noff;                   // Depth of push_off() nesting.
-  int intena;                 // Were interrupts enabled before push_off()?
+  struct proc *proc;          // The process running on this cpu, or null. 如果已经在执行 就将其=0
+  struct context context;     // swtch() here to enter scheduler().  存储被切换出去的进程上下文
+  int noff;                   // Depth of push_off() nesting. 嵌套关中断的次数
+  int intena;                 // Were interrupts enabled before push_off()?   // = 1，说明在push_off之前 中断在启用状态
 };
 
 extern struct cpu cpus[NCPU];
@@ -55,7 +56,7 @@ struct trapframe {
   /*  88 */ uint64 t2;
   /*  96 */ uint64 s0;
   /* 104 */ uint64 s1;
-  /* 112 */ uint64 a0;
+  /* 112 */ uint64 a0;   //  存放arg0 或者 retval
   /* 120 */ uint64 a1;
   /* 128 */ uint64 a2;
   /* 136 */ uint64 a3;
@@ -102,7 +103,9 @@ struct proc {
 
   // pagetable 内核中它是物理地址 但是va==pa
   pagetable_t pagetable;       // User page table  // 每个进程有自己的独立页表。 有自己独立的用户栈（exec的时候创建）和独立的内核栈（内核初始化的时候创建proc_mapstacks）
-  // trapframe是物理地址， 它也有有用户态（user）虚拟地址  trampoline 也有用户态虚拟地址 也有物理地址
+  // trapframe是物理地址 它也有有用户态（user）虚拟地址  trampoline 也有用户态虚拟地址 也有物理地址
+  // 进程的p->trapframe也指向trapframe，不过是指向它的物理地址（来自kalloc分配）会映射到虚拟地址TRAPFRAME，
+  // 这样内核可以通过内核页表来使用它。
   struct trapframe *trapframe; // data page for trampoline.S
   struct context context;      // swtch() here to run process
   struct file *ofile[NOFILE];  // Open files

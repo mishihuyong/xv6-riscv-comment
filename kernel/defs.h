@@ -115,8 +115,8 @@ void            acquire(struct spinlock*);
 int             holding(struct spinlock*);
 void            initlock(struct spinlock*, char*);
 void            release(struct spinlock*);
-void            push_off(void);
-void            pop_off(void);
+void            push_off(void);  // 关闭中断
+void            pop_off(void);   // 开启中断
 
 // sleeplock.c
 void            acquiresleep(struct sleeplock*);

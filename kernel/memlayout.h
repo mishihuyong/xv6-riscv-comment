@@ -56,4 +56,42 @@
 //   ...
 //   TRAPFRAME (p->trapframe, used by the trampoline)
 //   TRAMPOLINE (the same page as in the kernel)
-#define TRAPFRAME (TRAMPOLINE - PGSIZE)
+#define TRAPFRAME (TRAMPOLINE - PGSIZE)   // 这个地址只在进程的用户态的时候有，其他情况下没有这个东西
+
+
+// 用户进程的布局 虚拟地址：User memory layout.  【用户态虚拟地址】
+// Address zero first:
+//   text
+//   original data and bss
+//   fixed-size stack
+//   expandable heap
+//   ...
+//   TRAPFRAME (p->trapframe, used by the trampoline)
+//   TRAMPOLINE (the same page as in the kernel)
+
+// 内核布局 基于虚拟地址                         【内核态虚拟地址】
+// Address zero first:
+//  0
+//  clint
+//  plic
+//  uarto
+//  virtio disk
+//  kernel text
+//  kernel data  全局变量和BSS。其包含stack0，也就是内核自己的栈
+//  free memory... 
+//  各个进程的内核栈proc[i]->kstack
+//  TRAMPOLINE
+
+// 内核布局 基于物理地址                         【内核态物理地址】
+// Address zero first:                    
+//  0
+//  clint
+//  plic
+//  uarto
+//  virtio disk
+//  kernel text //包含trampoline
+//  kernel data  其包含stack0. 也就是内核的自己栈也在这 
+//  内核页表和各个进程的内核栈  // 因为是最先用kalloc分配的
+//  RAM
+//  unused
+

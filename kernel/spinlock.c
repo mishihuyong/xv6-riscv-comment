@@ -21,6 +21,9 @@ initlock(struct spinlock *lk, char *name)
 void
 acquire(struct spinlock *lk)
 {
+  // 关闭中断是为了避免死锁
+  // 自旋锁和中断的相互作用带来了一个潜在的危险。假设`sys_sleep`持有`tickslock`，而它的CPU接收到一个时钟中断。`clockintr`会尝试获取`tickslock`，看到它被持有，并等待它被释放。在这种情况下，`tickslock`永远不会被释放：只有`sys_sleep`可以释放它，但`sys_sleep`不会继续运行，直到`clockintr`返回。所以CPU会死锁，任何需要其他锁的代码也会冻结。
+  // 为了避免这种情况，如果一个中断处理程序使用了自旋锁，CPU决不能在启用中断的情况下持有该锁。Xv6则采用了更加保守的策略：当一个CPU获取任何锁时，xv6总是禁用该CPU上的中断。中断仍然可能发生在其他CPU上，所以一个中断程序获取锁会等待一个线程释放自旋锁，但它们不在同一个CPU上。
   push_off(); // disable interrupts to avoid deadlock.
   if(holding(lk))
     panic("acquire");
@@ -84,25 +87,26 @@ holding(struct spinlock *lk)
 // push_off/pop_off are like intr_off()/intr_on() except that they are matched:
 // it takes two pop_off()s to undo two push_off()s.  Also, if interrupts
 // are initially off, then push_off, pop_off leaves them off.
-
+// 禁用中断
 void
 push_off(void)
 {
-  int old = intr_get();
+  int old = intr_get();  // 获取当前设备中断是否开启了
 
-  intr_off();
-  if(mycpu()->noff == 0)
-    mycpu()->intena = old;
-  mycpu()->noff += 1;
+  intr_off();  // 禁止设备中断
+  if(mycpu()->noff == 0)  // 如果之前 没有禁止过中断
+    mycpu()->intena = old; // = 1，说明在push_off之前 中断在启用状态
+  mycpu()->noff += 1; // 
 }
 
+// 开启中断
 void
 pop_off(void)
 {
   struct cpu *c = mycpu();
-  if(intr_get())
+  if(intr_get()) // 如果已经开启了中断，说明执行顺序有问题
     panic("pop_off - interruptible");
-  if(c->noff < 1)
+  if(c->noff < 1) // 如果多次禁用中断 说明开启次数多 
     panic("pop_off");
   c->noff -= 1;
   if(c->noff == 0 && c->intena)
