@@ -72,6 +72,8 @@ cpuid()
   return id;
 }
 
+// 下面这两个函数要注意看7.4章节 这两个函数的执行要禁用中断
+
 // Return this CPU's cpu struct.
 // Interrupts must be disabled.
 struct cpu*
@@ -148,7 +150,7 @@ found:
   // which returns to user space.
   memset(&p->context, 0, sizeof(p->context));
 
-  // forkret 第一次会帮助 进程回到用户态. 
+  // forkret 第一次会帮助 进程回到用户态. 帮助释放p->lock
   // 进程从用户态回到内核态,是通过系统调用或者中断(定时中断)
   // 进程后面如果在内核态发生了调度, 现在想回到用户态,但是这时候ra不是forkret怎么办?
   // 答案: 这个时候ra虽然不是forkret的地址,也是在uservec, usertrap,usertrapret,useret这些函数的某个地址.它后续用最后的
@@ -467,6 +469,7 @@ wait(uint64 addr)
 //  - swtch to start running that process.
 //  - eventually that process transfers control
 //    via swtch back to the scheduler.
+// 详细细节 在book的7.3 Code: Scheduling 说的很清楚
 void
 scheduler(void)
 {
@@ -523,6 +526,7 @@ scheduler(void)
 // there's no process.
 
 // 该函数放弃进程的执行,将执行上下文改回到 scheduler()函数的环境
+// 要求禁用中断 因为:调用cpuid和mycpu时，需要禁用中断)
 void
 sched(void)
 {
@@ -551,6 +555,7 @@ sched(void)
   mycpu()->intena = intena;
 }
 
+// 要求禁用中断调用cpuid和mycpu时，需要禁用中断)
 // Give up the CPU for one scheduling round.
 // 让当前进程放弃在cpu中执行进入scheduler()循环，但是还是runnable 所以进入下个循环会被重新执行。
 void
@@ -565,6 +570,7 @@ yield(void)
 
 // A fork child's very first scheduling by scheduler()
 // will swtch to forkret.
+// 有一种情况是调度器对swtch的调用没有以sched结束。当一个新进程第一次被调度时，它从forkret开始（kernel/proc.c:527）。forkret的存在是为了释放p->lock；否则，新进程需要从usertrapret开始。
 void
 forkret(void)
 {
