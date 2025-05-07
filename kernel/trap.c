@@ -65,6 +65,7 @@ usertrap(void)
   // since we're now in the kernel.
   // 由于usertrap运行在内核态, 所以usertrap的第一步就是执行  w_stvec((uint64)kernelvec);
   // 这个函数之后,如果在内核态执行发生了中断或异常 就进入到kernelvec中执行. 否则接着执行完usertrap
+  // 为啥trapinithart 设置了,这里继续设置? 因为usertrapret会改.这里是恢复
   w_stvec((uint64)kernelvec);
 
   struct proc *p = myproc();
@@ -94,7 +95,7 @@ usertrap(void)
     // an interrupt will change sepc, scause, and sstatus,
     // so enable only now that we're done with those registers.
     // 一次中断会修改 sepc,scuase,sstatus, 所以我们将这些寄存器处理完后才打开中断(前面urertrapret关闭了中断)
-    intr_on(); // 打开中断
+    intr_on(); // 打开中断  为什么只在 usertrapret 关闭了中断后面回到用户态的时候就打开了中断,后面又多次打开中断?????
 
     // 调用对应的系统调用,返回值保存在trapfram->a0. 返回到用户态的时候,c函数调用会将这个a0作为返回值
     // 特别的:  fork 的子进程 是直接赋值a0

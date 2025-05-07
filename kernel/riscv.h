@@ -413,6 +413,7 @@ r_time()
 }
 
 // enable device interrupts
+// 还没搞清除SSTATUS_SIE 和 SSTATUS_SPIE 怎么配合的????
 static inline void
 intr_on()
 {

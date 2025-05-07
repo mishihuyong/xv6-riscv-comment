@@ -148,6 +148,13 @@ found:
   // which returns to user space.
   memset(&p->context, 0, sizeof(p->context));
 
+  // forkret 第一次会帮助 进程回到用户态. 
+  // 进程从用户态回到内核态,是通过系统调用或者中断(定时中断)
+  // 进程后面如果在内核态发生了调度, 现在想回到用户态,但是这时候ra不是forkret怎么办?
+  // 答案: 这个时候ra虽然不是forkret的地址,也是在uservec, usertrap,usertrapret,useret这些函数的某个地址.它后续用最后的
+  // useret的 sret指令返回到用户态
+  // 所以总结下: p->context->ra 只会是 forkret,uservec, usertrap,usertrapret,useret 这几个函数或这个几个函数里面的函数的地址!!!
+
   // p->context.ra存储函数调用后的返回地址（即 call 指令下一条指令的地址）
   // swtch保存了ra寄存器，它保存了swtch应该返回的地址。现在，swtch从新的上下文中恢复寄存器，
   // 新的上下文中保存着前一次swtch所保存的寄存器值。当swtch返回时，它返回到被恢复的ra寄存器所指向的指令，
@@ -470,7 +477,10 @@ scheduler(void)
   for(;;){
     // The most recent process to run may have had interrupts
     // turned off; enable them to avoid a deadlock if all
-    // processes are waiting.
+    // processes are waiting. 
+    // 最近运行的进程可能关闭了中断,为了避免所有进程等待进入死锁打开中断
+    // 没看懂这里打开中断, // 还没搞清除SSTATUS_SIE 和 SSTATUS_SPIE 怎么配合的????
+    // 什么只在 usertrapret 短暂的关闭了中断,usertrapret调用sret回到用户态的时候就打开了中断,又多次打开中断?????
     intr_on();
 
     int found = 0;
@@ -497,6 +507,7 @@ scheduler(void)
     }
     if(found == 0) {
       // nothing to run; stop running on this core until an interrupt.
+      // 没看懂这里打开中断/ 什么只在 usertrapret 短暂的关闭了中断,usertrapret调用sret回到用户态的时候就打开了中断,又多次打开中断?????
       intr_on();
       asm volatile("wfi");  // 提示cpu可以进入低功耗状态
     }

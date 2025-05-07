@@ -1,6 +1,8 @@
 // Saved registers for kernel context switches.
 // 这些寄存器就是函数调用要用到的寄存器
 struct context {
+  // 总结下:ra只会是 forkret,uservec, usertrap,usertrapret,useret 这几个函数或这几个函数里面的函数的地址!!!
+  // 所以 ra 用来保存swtch后执行的指令, 其最终会让进程回到用户态.因为如前所述,它在trap中
   uint64 ra;  // 在执行子程序调用之前，ra设置为子程序的返回地址，通常为“pc + 4”
   uint64 sp;  // 栈顶
 
