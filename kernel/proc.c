@@ -541,7 +541,7 @@ sched(void)
 }
 
 // Give up the CPU for one scheduling round.
-// 让当前进程放弃在cpu中执行，但是还是runnable 所以进入下个循环会被重新执行。
+// 让当前进程放弃在cpu中执行进入scheduler()循环，但是还是runnable 所以进入下个循环会被重新执行。
 void
 yield(void)
 {
@@ -578,6 +578,7 @@ forkret(void)
 
 // Atomically release lock and sleep on chan.
 // Reacquires lock when awakened.
+// 放弃当前进程的执行
 void
 sleep(void *chan, struct spinlock *lk)
 {
@@ -607,7 +608,7 @@ sleep(void *chan, struct spinlock *lk)
   acquire(lk);
 }
 
-// Wake up all processes sleeping on chan.
+// Wake up all processes sleeping on chan. 将所有睡眠的进程唤醒
 // Must be called without any p->lock.
 void
 wakeup(void *chan)

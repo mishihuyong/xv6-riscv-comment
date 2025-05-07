@@ -63,6 +63,8 @@ usertrap(void)
 
   // send interrupts and exceptions to kerneltrap(),
   // since we're now in the kernel.
+  // 由于usertrap运行在内核态, 所以usertrap的第一步就是执行  w_stvec((uint64)kernelvec);
+  // 这个函数之后,如果在内核态执行发生了中断或异常 就进入到kernelvec中执行. 否则接着执行完usertrap
   w_stvec((uint64)kernelvec);
 
   struct proc *p = myproc();
@@ -131,11 +133,14 @@ usertrapret(void)
   // we're about to switch the destination of traps from
   // kerneltrap() to usertrap(), so turn off interrupts until
   // we're back in user space, where usertrap() is correct.
+  // 也就是在响应trap完成之后,到恢复到用户态的这段时间窗要把中断关闭,如果开了中断会改变sepc, scause, and sstatus的值
+  // 导致整个程序错误,但是为啥内核态的kerneltrap不用管呢??
 
   // 当CPU从用户空间进入内核时，Xv6将CPU的stvec设置为kernelvec；可以在usertrap（kernel/trap.c:29）中看到这一点。
   // 内核运行但stvec被设置为uservec时，这期间有一个时间窗口，
   // 在这个窗口期，禁用设备中断是至关重要的。幸运的是，
   // RISC-V总是在开始使用trap时禁用中断，xv6在设置stvec之前不会再次启用它们。
+  
   intr_off(); // 除了spinlock 这里是唯一关闭中断的地方. 打开的地方在trapret调用sret回到用户空间,还有scheduler和 usertrap系统调用这之间会使用sepc, scause, and sstatus
 
   // send syscalls, interrupts, and exceptions to uservec in trampoline.S
