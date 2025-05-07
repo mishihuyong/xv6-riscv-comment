@@ -33,6 +33,8 @@ start()
   // delegate all interrupts and exceptions to supervisor mode.
   w_medeleg(0xffff);   // 将m模式的异常交给 s模式
   w_mideleg(0xffff);   // 将m模式的中断交给 s模式
+
+  // sie寄存器和 sstatus.SIE 都使能才有中断开启效果 ,如果sstatus.SIE开启,而SIE是关闭的 也不能使能中断!!!
   w_sie(r_sie() | SIE_SEIE | SIE_STIE | SIE_SSIE);  // 设置 系统的 时钟中断，软件中断，使能
 
   // configure Physical Memory Protection to give supervisor mode
@@ -48,7 +50,7 @@ start()
   w_tp(id); // 设置这个给后 tp寄存器 就是cpuid了
 
   // switch to supervisor mode and jump to main().
-  asm volatile("mret");   // 用了这个后 就切换到s模式
+  asm volatile("mret");  
 }
 
 // ask each hart to generate timer interrupts.

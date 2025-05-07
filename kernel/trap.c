@@ -133,8 +133,8 @@ usertrapret(void)
   // we're about to switch the destination of traps from
   // kerneltrap() to usertrap(), so turn off interrupts until
   // we're back in user space, where usertrap() is correct.
-  // 也就是在响应trap完成之后,到恢复到用户态的这段时间窗要把中断关闭,如果开了中断会改变sepc, scause, and sstatus的值
-  // 导致整个程序错误,但是为啥内核态的kerneltrap不用管呢??
+  // 也就是在响应用户态的trap处理基本完成之后,到恢复到用户态的这段时间窗要把中断关闭,如果开了中断会改变sepc, scause, and sstatus的值
+  // 导致整个程序错误,但是为啥内核态的kerneltrap不用关闭中断呢?? 中断嵌套咋办??
 
   // 当CPU从用户空间进入内核时，Xv6将CPU的stvec设置为kernelvec；可以在usertrap（kernel/trap.c:29）中看到这一点。
   // 内核运行但stvec被设置为uservec时，这期间有一个时间窗口，
@@ -188,7 +188,8 @@ kerneltrap()
   uint64 sepc = r_sepc();
   uint64 sstatus = r_sstatus();
   uint64 scause = r_scause();
-  
+  // 这里要是发生了内核态中断嵌套咋办??? sstatus sepc scause都会被改变. 而为啥usertrapret要关闭中断
+  // 我的理解是: 可能类似是与递归嵌套一样 ,会自然恢复. 且 usertrap 也没关闭中断.感觉xv6 在这一块代码不够清晰简练
   if((sstatus & SSTATUS_SPP) == 0)
     panic("kerneltrap: not from supervisor mode");
   if(intr_get() != 0)

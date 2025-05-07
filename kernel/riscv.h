@@ -118,6 +118,72 @@ r_sstatus()
   return x;
 }
 
+// 这个函数和 w_sie 是否有点重复??
+
+// 在 RISC-V 架构中，SIE（Supervisor Interrupt Enable） 涉及两个相关的寄存器位：
+
+// sie（Supervisor Interrupt Enable）寄存器：控制哪些中断类型可以在 Supervisor 模式（S-mode）下被启用。
+
+// sstatus.SIE（Supervisor Interrupt Enable in sstatus）：控制全局中断开关，决定是否允许 S-mode 处理任何中断。
+
+// 1. sie 寄存器（中断类型使能）
+// 作用：sie 是一个可写的 CSR（Control and Status Register），用于按中断类型单独使能或禁用中断。
+
+// 关键位（与 S-mode 相关）：
+
+// sie.SEIE（External Interrupt）
+
+// sie.STIE（Timer Interrupt）
+
+// sie.SSIE（Software Interrupt）
+
+// 特点：
+
+// 即使 sstatus.SIE = 1，如果 sie 的对应位（如 STIE）为 0，该中断仍然不会触发。
+
+// 类似于 x86 的 PIC/APIC 中断屏蔽寄存器。
+
+// 2. sstatus.SIE（全局中断开关）
+// 作用：sstatus 寄存器的 SIE 位（第 1 位）是全局中断使能位，决定 S-mode 是否允许处理任何中断。
+
+// 行为：
+
+// sstatus.SIE = 1：允许 S-mode 处理已通过 sie 使能的中断。
+
+// sstatus.SIE = 0：禁止所有中断（即使 sie 对应位已设置）。
+
+// 特点：
+
+// 类似于 x86 的 EFLAGS.IF（全局中断开关）。
+
+// 在进入中断处理程序时，硬件自动清除 sstatus.SIE（防止嵌套中断），退出时恢复。
+
+// 关键区别
+// 特性	sie（中断类型使能）	sstatus.SIE（全局开关）
+// 作用	控制哪些中断类型可触发	控制是否允许任何中断
+// 影响范围	按中断类型（SEIE/STIE/SSIE）	全局（所有中断）
+// 硬件行为	不自动修改，需手动配置	进入中断时自动清零，退出时恢复 *****
+// 类比	类似 x86 的 PIC 屏蔽位	类似 x86 的 EFLAGS.IF
+// 示例场景
+// asm
+// # 允许 S-mode 处理定时器中断（STIE）并全局启用中断
+// li t0, 1 << 5      # STIE 是 sie 的第 5 位
+// csrs sie, t0       # sie.STIE = 1（允许定时器中断）
+// li t1, 1 << 1      # SIE 是 sstatus 的第 1 位
+// csrs sstatus, t1   # sstatus.SIE = 1（全局允许中断）
+// 中断触发条件
+// 在 S-mode 下，中断触发需同时满足：
+
+// sstatus.SIE = 1（全局允许中断）。
+
+// sie 对应位使能（如 STIE 对定时器中断）。
+
+// 中断优先级高于当前执行环境（无更高优先级中断屏蔽）。
+
+// 总结
+// sie：细粒度控制哪些中断类型可以触发（类似“开关组”）。
+
+// sstatus.SIE：总开关，决定 S-mode 是否响应任何中断（类似“总闸”）。
 static inline void 
 w_sstatus(uint64 x)
 {

@@ -23,7 +23,7 @@ main()
     kvminithart();   // turn on paging  // 为什么这之后的uvmcopy 内核态还需要获取物理地址才能操作
     procinit();      // process table
     trapinit();      // trap vectors
-    trapinithart();  // install kernel trap vector
+    trapinithart();  // install kernel trap vector   // 注册kernel trap处理入口
     plicinit();      // set up interrupt controller
     plicinithart();  // ask PLIC for device interrupts
     binit();         // buffer cache
@@ -39,9 +39,9 @@ main()
     __sync_synchronize();
     printf("hart %d starting\n", cpuid());
     kvminithart();    // turn on paging
-    trapinithart();   // install kernel trap vector
+    trapinithart();   // install kernel trap vector // 注册kernel trap处理入口
     plicinithart();   // ask PLIC for device interrupts
   }
 
-  scheduler();        
+  scheduler();  // 每个cpu都进入到scheduler死循环      
 }
