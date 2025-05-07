@@ -147,8 +147,18 @@ found:
   // Set up new context to start executing at forkret,
   // which returns to user space.
   memset(&p->context, 0, sizeof(p->context));
-  p->context.ra = (uint64)forkret;
-  // // 分页后调用procinit 给kstack指定了虚拟地址
+
+  // p->context.ra存储函数调用后的返回地址（即 call 指令下一条指令的地址）
+  // swtch保存了ra寄存器，它保存了swtch应该返回的地址。现在，swtch从新的上下文中恢复寄存器，
+  // 新的上下文中保存着前一次swtch所保存的寄存器值。当swtch返回时，它返回到被恢复的ra寄存器所指向的指令，
+  // 也就是当这个进程第一次被执行时,就会执行forkret ,forkret会进入到用户态
+  // a0 寄存器和 ra寄存器的区别举例:
+  // int val = fun(); c语言代码
+  // call fun; fun的栈中最后会是ret指令  汇编指令
+  // mov a0, a1[0]; a1[0]就是val        汇编指令
+  // 则 call fun后都ret指令执行,就会把返回值赋值给a0, 然后ra寄存器就是存的mov指令(call的下一条指令)
+  p->context.ra = (uint64)forkret; 
+  // 分页后调用procinit 给kstack指定了虚拟地址
   p->context.sp = p->kstack + PGSIZE;  // 由于是空的 所以要加PAGSIZE
 
   return p;
@@ -308,7 +318,7 @@ fork(void)
 
   // Cause fork to return 0 in the child.
   //  如果是在child进程里， fork返回的是a0的值 也就是0
-  // 当swtch程序 将环境切换到np上的时候，a0就会成为for的返回值
+  // 当child进程在cpu中执行,返回用户态,a0就会成为c函数fork的返回值
   np->trapframe->a0 = 0;
 
   // increment reference counts on open file descriptors.
@@ -331,7 +341,7 @@ fork(void)
   np->state = RUNNABLE;
   release(&np->lock);
 
-  return pid; // parent 进程 FORK返回子进程的PID。如果swtch切到这个进程 a0 就会是这个pid（编译器编译的时候默认就会这样编）
+  return pid; // parent 进程 FORK返回子进程的PID。如果swtch切到这个进程,返回用户态c函数fork调用 a0 就会是这个pid（编译器编译的时候默认就会这样编）
 }
 
 // Pass p's abandoned children to init.
@@ -472,11 +482,15 @@ scheduler(void)
         // before jumping back to us.
         p->state = RUNNING;
         c->proc = p;  // 唯一给proc赋有效值的地方
-        swtch(&c->context, &p->context);  // 执行这个进程 , 将之前的寄存器存放到c->context
+
+        // 注意第一次执行进程的时候ra 是 forkret，forkret 会调用usertrapret 返回用户空间
+
+        //执行这个进程 , 将之前的寄存器也就是scheduler()函数的上下文环境存放到c->context
+        swtch(&c->context, &p->context);  
 
         // Process is done running for now.
         // It should have changed its p->state before coming back.
-        c->proc = 0;  // 没太明白
+        c->proc = 0;  // 没太明白？？
         found = 1;
       }
       release(&p->lock);
@@ -496,6 +510,8 @@ scheduler(void)
 // be proc->intena and proc->noff, but that would
 // break in the few places where a lock is held but
 // there's no process.
+
+// 该函数放弃进程的执行,将执行上下文改回到 scheduler()函数的环境
 void
 sched(void)
 {
@@ -506,17 +522,26 @@ sched(void)
     panic("sched p->lock");
   if(mycpu()->noff != 1)
     panic("sched locks");
-  if(p->state == RUNNING)  // 当前进程是runing状态
+  if(p->state == RUNNING)  // 当前进程是runing状态 
     panic("sched running"); // 不应该调用sched？？
   if(intr_get())  // 如果开启了中断
     panic("sched interruptible");
 
   intena = mycpu()->intena;
-  swtch(&p->context, &mycpu()->context);  // 放弃当前的进程的执行，将寄存器存放在p->contexts // 执行上次的进程
+
+  // 放弃当前的进程的执行，将上下文环境(就是当前进程的寄存器)存放在p->contexts下一次循环可能会用 
+  // 当前进程的context切换到 scheduler()函数的上下文
+
+  // 解释mycpu()->context为啥是scheduler()的上下文:
+  // 在内核的初始化的时候(main.c) 每个cpu 都会死循环执行scheduler()函数.也就是进入得到工作状态.只有被中断才能打断
+  // 这个时候如果有进程进入runable状态. 会执行 swtch(c->context, p->context),也就是将进程改为running执行进程(就是把进程的上下文环境放在当前的cpu上). 
+  // 这时将scheduler的环境存在cpu上下文中. 
+  swtch(&p->context, &mycpu()->context); 
   mycpu()->intena = intena;
 }
 
 // Give up the CPU for one scheduling round.
+// 让当前进程放弃在cpu中执行，但是还是runnable 所以进入下个循环会被重新执行。
 void
 yield(void)
 {
@@ -548,7 +573,7 @@ forkret(void)
     __sync_synchronize();
   }
 
-  usertrapret();
+  usertrapret(); // 注册用户态的异常处理:w_stvec(trampoline_uservec); 
 }
 
 // Atomically release lock and sleep on chan.
@@ -624,6 +649,8 @@ kill(int pid)
   return -1;
 }
 
+
+// 只有在系统调用kill和 usertrap异常处理才会标记killed，
 void
 setkilled(struct proc *p)
 {

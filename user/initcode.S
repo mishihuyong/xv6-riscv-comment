@@ -9,12 +9,12 @@ start:
         la a0, init  # 下面的init字符串
         la a1, argv  # 下面定义argv： inti， 0
         li a7, SYS_exec
-        ecall
+        ecall  # 系统i奥永
 
 # for(;;) exit();
 exit:
         li a7, SYS_exit
-        ecall
+        ecall # 系统i奥永
         jal exit
 
 # char init[] = "/init\0";

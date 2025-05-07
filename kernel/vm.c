@@ -435,6 +435,9 @@ copyin(pagetable_t pagetable, char *dst, uint64 srcva, uint64 len)
 // Copy bytes to dst from virtual address srcva in a given page table,
 // until a '\0', or max.
 // Return 0 on success, -1 on error.
+// srcva 是用户态传给内核的字符串的指针,现在它自己已经是内核态虚拟地址了,但是它指向的是用户态字符串的地址
+//
+// 
 int
 copyinstr(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max)
 {
@@ -450,14 +453,14 @@ copyinstr(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max)
     if(n > max)
       n = max;
 
-    char *p = (char *) (pa0 + (srcva - va0));
+    char *p = (char *) (pa0 + (srcva - va0)); // 在内核态获取了用户态的字符串初始地址
     while(n > 0){
       if(*p == '\0'){
         *dst = '\0';
         got_null = 1;
         break;
       } else {
-        *dst = *p;
+        *dst = *p; // 在内核态的空间拷贝这个字符串
       }
       --n;
       --max;

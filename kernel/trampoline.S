@@ -15,7 +15,8 @@
 #include "riscv.h"
 #include "memlayout.h"
 
-# uservec 就是将用户态的寄存器保存到p->trapframe,将页表切换到内核页表，然后跳转到usertrap函数执行
+# 这段汇编是为真正的陷阱逻辑做铺垫和收尾
+# uservec 就是将用户态的寄存器保存到p->trapframe, 将寄存器的sp,tp切换到内核态（用trapframe保存的），将页表切换到内核页表，然后跳转到usertrap函数执行
 # userret 就是将 用户态的寄存器还原，将页表切换到进程的用户态页表。然后模式返回到用户态
 
 # 由于这两段代码会在用户页和内核页表之间相互切换。所以 TRAMPOLINE在用户态和内核态的地址要一样，否则没法工作
@@ -25,11 +26,11 @@
 .globl usertrap
 trampoline:
 .align 4
-.globl uservec
+.globl uservec  # 工作在内核态, 但用的进程用户态的页表
 uservec:    
 	#
         # trap.c sets stvec to point here, so   将stvec（S模式下的trap处理程序的地址）设置为uservec
-        # traps from user space start here,     但是是S模式下用户态的页表
+        # traps from user space start here,     但是是S模式下使用的是用户态的页表
         # in supervisor mode, but with a
         # user page table.
         #
@@ -106,17 +107,18 @@ uservec:
         # jump to usertrap(), which does not return
         jr t0   # t0寄存器指向 trapframe->kernel_trap  就是 usertrap。  无条件跳转到kernel_trap（usertrap）
 
-.globl userret
+.globl userret  # 工作在内核态
 userret:
         # userret(pagetable)
         # called by usertrapret() in trap.c to
         # switch from kernel to user.
         # a0: user page table, for satp.
+        # 切换到用户态的唯一方式
 
         # switch to the user page table.
         sfence.vma zero, zero
 
-        csrw satp, a0  #  usertrapret(void) 最后会调用((void (*)(uint64))trampoline_userret)(satp);  a0就是arg0 也是a0就是satp的值 就是进程的用户态页表地址
+        csrw satp, a0  #  usertrapret(void)里面最后会调用((void (*)(uint64))trampoline_userret)(satp);  a0就是arg0 也是a0就是satp的值 就是进程的用户态页表地址
         sfence.vma zero, zero
 
         # TRAPFRAME 只作为内核态的虚拟地址

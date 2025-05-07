@@ -46,10 +46,13 @@ trapinithart(void)
   w_stvec((uint64)kernelvec);
 }
 
-//
 // handle an interrupt, exception, or system call from user space.
 // called from trampoline.S
-// 用户态陷阱处理程序
+// 用户态陷阱处理程序：
+// 设置内核vec； 保存异常开始时候的PC
+// 1）读取scause寄存器如果是系统调用，如果用户态进程被标记为killed，zombie，释放资源。调用系统调用
+// 2）如果是定时器和外设中断 啥都不用做
+// 3）如果是异常，标记程序killed
 void
 usertrap(void)
 {
@@ -65,24 +68,36 @@ usertrap(void)
   struct proc *p = myproc();
   
   // save user program counter.
-  p->trapframe->epc = r_sepc(); // 异常发生时会把异常之前的地址存在sepc
+  // process 最开始的 exec里 epc是main, 后面执行后epc变了
+  // 异常发生时硬件会把异常之前的地址存在sepc。 而不是现在的指令 epc=r_sepc赋值指令
+  // 原因:这是因为usertrap中可能会有一个进程切换，导致sepc被覆盖。所以要把现在的process的epc存下来
+  // 以免yield 切换后 恢复错误的epc
+  p->trapframe->epc = r_sepc(); 
   
   if(r_scause() == 8){
     // system call
 
-    if(killed(p)) // 如果程序已经被杀死了
+    if(killed(p)) // 如果程序已经被标记退出。  为什么要在这里处理？？？
       exit(-1);   // 释放进程资源，把状态改为ZOMBIE
 
     // sepc points to the ecall instruction,
     // but we want to return to the next instruction.
+    // 把用户pc加4，因为RISC-V在执行系统调用时，会留下指向ecall指令的程序指针[2]。
+    // 比如
+    // rint " li a7, SYS_${name}\n";
+    // print " ecall\n";
+    // print " ret\n";
     p->trapframe->epc += 4;  // 系统调用用的是ecall。 我们希望系统调用返回的时候执行的是ecall的下一条指令
 
     // an interrupt will change sepc, scause, and sstatus,
     // so enable only now that we're done with those registers.
-    intr_on();
+    // 一次中断会修改 sepc,scuase,sstatus, 所以我们将这些寄存器处理完后才打开中断(前面urertrapret关闭了中断)
+    intr_on(); // 打开中断
 
-    syscall();  // 调用对应的系统调用
-  } else if((which_dev = devintr()) != 0){  // 定时器和外设中断
+    // 调用对应的系统调用,返回值保存在trapfram->a0. 返回到用户态的时候,c函数调用会将这个a0作为返回值
+    // 特别的:  fork 的子进程 是直接赋值a0
+    syscall();  
+  } else if((which_dev = devintr()) != 0){  // 定时器和外设中断 调用devintr
     // ok
   } else {
     // 程序发生了异常（比如除0） 将程序标记为killed 
@@ -91,12 +106,16 @@ usertrap(void)
     setkilled(p);
   }
 
-  if(killed(p))
+  if(killed(p))//  只有在系统调用kill和 异常处理才会标记killed，这里应该是处理异常的标记。系统调用的killed标记在前面已经处理
     exit(-1);  // 释放进程资源 标记状态为 zombie，调用进程切换
 
   // give up the CPU if this is a timer interrupt.
-  if(which_dev == 2)  // 如果是定时器中断，要切换下进程
-    yield();
+  if(which_dev == 2)  // 如果是定时器中断，要切换下
+    // 想象下这种场景: 
+    // 场景1)cpu在执行进程的用户态指令, 被定时器中断打断. 进入usertrap.调用yield
+    // 将进程放弃执行,进入到scheduler
+    // 场景 2) cpu在执行进程的内核态指令,被定时器中断打断,进入kerneltrap,调用yield 放弃执行进入scheduler
+    yield();  // 这个到scheduler打开中断
 
   usertrapret();  //  处理完了 返回到用户态
 }
@@ -112,15 +131,21 @@ usertrapret(void)
   // we're about to switch the destination of traps from
   // kerneltrap() to usertrap(), so turn off interrupts until
   // we're back in user space, where usertrap() is correct.
-  intr_off();
+
+  // 当CPU从用户空间进入内核时，Xv6将CPU的stvec设置为kernelvec；可以在usertrap（kernel/trap.c:29）中看到这一点。
+  // 内核运行但stvec被设置为uservec时，这期间有一个时间窗口，
+  // 在这个窗口期，禁用设备中断是至关重要的。幸运的是，
+  // RISC-V总是在开始使用trap时禁用中断，xv6在设置stvec之前不会再次启用它们。
+  intr_off(); // 除了spinlock 这里是唯一关闭中断的地方. 打开的地方在trapret调用sret回到用户空间,还有scheduler和 usertrap系统调用这之间会使用sepc, scause, and sstatus
 
   // send syscalls, interrupts, and exceptions to uservec in trampoline.S
+  // 物理地址算出偏移加上TRAMPOLINE就是uservec虚拟地址
   uint64 trampoline_uservec = TRAMPOLINE + (uservec - trampoline);
-  w_stvec(trampoline_uservec); // 设置 异常入口  trampoline_uservec 为uservec的虚拟地址
+  w_stvec(trampoline_uservec); // 注册 异常入口  trampoline_uservec 为uservec的虚拟地址
 
   // set up trapframe values that uservec will need when
   // the process next traps into the kernel.
-  // 设置异常处理信息
+  // p->trapframe 是物理地址，但是进程的用户态也能通过你TRAPFRAME用户态虚拟地址来访问它
   p->trapframe->kernel_satp = r_satp();         // kernel page table
   p->trapframe->kernel_sp = p->kstack + PGSIZE; // process's kernel stack
   p->trapframe->kernel_trap = (uint64)usertrap; // trampoline.s 的uservec 会无条件跳转到这个函数
@@ -132,11 +157,12 @@ usertrapret(void)
   // set S Previous Privilege mode to User.
   unsigned long x = r_sstatus();
   x &= ~SSTATUS_SPP; // clear SPP to 0 for user mode   清除用户态标志
-  x |= SSTATUS_SPIE; // enable interrupts in user mode
+  x |= SSTATUS_SPIE; // enable interrupts in user mode   // 在最后调用sret返回用户态就隐式的打开中断!!!
   w_sstatus(x);
 
   // set S Exception Program Counter to the saved user pc.
-  w_sepc(p->trapframe->epc); // 设置执行sret后 恢复到正常的用户态的下一条执行指令
+  // 这是因为usertrap中可能会有一个进程切换，导致sepc被覆盖。所以trapframe 要保存当时的进程的epc
+  w_sepc(p->trapframe->epc); // 设置执行sret后 恢复到正常的用户态的执行指令
 
   // tell trampoline.S the user page table to switch to.
   uint64 satp = MAKE_SATP(p->pagetable);
@@ -145,7 +171,7 @@ usertrapret(void)
   // switches to the user page table, restores user registers,
   // and switches to user mode with sret.
   uint64 trampoline_userret = TRAMPOLINE + (userret - trampoline);
-  ((void (*)(uint64))trampoline_userret)(satp);   // a0是satp的值 就是进程的用户态页表地址
+  ((void (*)(uint64))trampoline_userret)(satp);   // a0是satp的值(因为a0就是第一个参数当然a0也可以作为返回值) 就是进程的用户态页表地址
 }
 
 // interrupts and exceptions from kernel code go here via kernelvec,
@@ -170,6 +196,7 @@ kerneltrap()
   }
 
   // give up the CPU if this is a timer interrupt.
+  // // 场景 2) cpu在执行进程的内核态指令,被定时器中断打断,进入kerneltrap,调用yield 放弃执行进入scheduler
   if(which_dev == 2 && myproc() != 0)
     yield();
 

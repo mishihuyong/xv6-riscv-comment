@@ -52,6 +52,8 @@ start()
 }
 
 // ask each hart to generate timer interrupts.
+// 定时器中断必须在机器模式下才能使用
+// xv6 会将定时器中断转成软中断
 void
 timerinit()
 {

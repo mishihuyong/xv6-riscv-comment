@@ -1,8 +1,8 @@
 // Saved registers for kernel context switches.
 // 这些寄存器就是函数调用要用到的寄存器
 struct context {
-  uint64 ra;
-  uint64 sp;
+  uint64 ra;  // 在执行子程序调用之前，ra设置为子程序的返回地址，通常为“pc + 4”
+  uint64 sp;  // 栈顶
 
   // callee-saved
   uint64 s0;
@@ -47,17 +47,17 @@ struct trapframe {
   /*  16 */ uint64 kernel_trap;   // usertrap()
   /*  24 */ uint64 epc;           // saved user program counter
   /*  32 */ uint64 kernel_hartid; // saved kernel tp
-  /*  40 */ uint64 ra;
-  /*  48 */ uint64 sp;
+  /*  40 */ uint64 ra;  // 在执行子程序调用之前，ra设置为子程序的返回地址，即 call 指令下一条指令的地址
+  /*  48 */ uint64 sp;  // 栈顶
   /*  56 */ uint64 gp;
-  /*  64 */ uint64 tp;
+  /*  64 */ uint64 tp;  // hardid
   /*  72 */ uint64 t0;
   /*  80 */ uint64 t1;
   /*  88 */ uint64 t2;
   /*  96 */ uint64 s0;
   /* 104 */ uint64 s1;
-  /* 112 */ uint64 a0;   //  存放arg0 或者 retval
-  /* 120 */ uint64 a1;
+  /* 112 */ uint64 a0;   // 1)存放arg0  2)retval 用于存储函数返回的数据结果 比如 addi a0,zero,42; ret 返回42
+  /* 120 */ uint64 a1;   // arg1
   /* 128 */ uint64 a2;
   /* 136 */ uint64 a3;
   /* 144 */ uint64 a4;

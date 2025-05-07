@@ -123,7 +123,7 @@ sys_fstat(void)
 uint64
 sys_link(void)
 {
-  char name[DIRSIZ], new[MAXPATH], old[MAXPATH];
+  char name[DIRSIZ], new[MAXPATH], old[MAXPATH]; // 
   struct inode *dp, *ip;
 
   if(argstr(0, old, MAXPATH) < 0 || argstr(1, new, MAXPATH) < 0)
