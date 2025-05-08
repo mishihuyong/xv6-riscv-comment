@@ -60,6 +60,9 @@ usertrap(void)
 
   if((r_sstatus() & SSTATUS_SPP) != 0)
     panic("usertrap: not from user mode");
+  
+    // 进入trap的时候 硬件会自动执行 sstatus.SPIE = sstatus.SIE; sstatus.SIE=0关闭中断,防止中断嵌套
+
 
   // send interrupts and exceptions to kerneltrap(),
   // since we're now in the kernel.
@@ -90,12 +93,18 @@ usertrap(void)
     // rint " li a7, SYS_${name}\n";
     // print " ecall\n";
     // print " ret\n";
-    p->trapframe->epc += 4;  // 系统调用用的是ecall。 我们希望系统调用返回的时候执行的是ecall的下一条指令
+
+    // 系统调用用的是ecall。 我们希望系统调用返回的时候执行的是ecall的下一条指令
+
+    // 因为进入trap分同步(异常,系统调用)和异步(中断). 
+    // 在硬件上.同步的场景下 sepc寄存器存的当前地址; 而异步存的是下一条地址
+    // ecall是同步的. 所以我们要+4来执行ecall的下一条指令
+    p->trapframe->epc += 4;  
 
     // an interrupt will change sepc, scause, and sstatus,
     // so enable only now that we're done with those registers.
     // 一次中断会修改 sepc,scuase,sstatus, 所以我们将这些寄存器处理完后才打开中断(前面urertrapret关闭了中断)
-    intr_on(); // 打开中断  为什么只在 usertrapret 关闭了中断后面回到用户态的时候就打开了中断,后面又多次打开中断?????
+    intr_on(); //  // 没看懂这里打开中断  为什么只在 usertrapret 短暂的关闭了中断,usertrapret调用sret回到用户态的时候就打开了中断,又多次打开中断?????
 
     // 调用对应的系统调用,返回值保存在trapfram->a0. 返回到用户态的时候,c函数调用会将这个a0作为返回值
     // 特别的:  fork 的子进程 是直接赋值a0
@@ -118,6 +127,7 @@ usertrap(void)
     // 场景1)cpu在执行进程的用户态指令, 被定时器中断打断. 进入usertrap.调用yield
     // 将进程放弃执行,进入到scheduler
     // 场景 2) cpu在执行进程的内核态指令,被定时器中断打断,进入kerneltrap,调用yield 放弃执行进入scheduler
+    // 这样开了中断被嵌套了 sepc和sstatus寄存器会变; 这里不在乎????,那为啥kerneltrap要在乎??
     yield();  // 这个到scheduler打开中断
 
   usertrapret();  //  处理完了 返回到用户态
@@ -142,7 +152,12 @@ usertrapret(void)
   // 在这个窗口期，禁用设备中断是至关重要的。幸运的是，
   // RISC-V总是在开始使用trap时禁用中断，xv6在设置stvec之前不会再次启用它们。
   
-  intr_off(); // 除了spinlock 这里是唯一关闭中断的地方. 打开的地方在trapret调用sret回到用户空间,还有scheduler和 usertrap系统调用这之间会使用sepc, scause, and sstatus
+  // 除了spinlock 这里是唯一显示关闭中断的地方. 打开的地方在trapret调用sret回到用户空间,
+  // 还有scheduler和 usertrap系统调用这之间会使用sepc, scause, and sstatus
+  // 隐式关闭中断就是进入trap,硬件会自动关闭中断,防止中断嵌套
+
+  // send syscalls, 
+  intr_off(); 
 
   // send syscalls, interrupts, and exceptions to uservec in trampoline.S
   // 物理地址算出偏移加上TRAMPOLINE就是uservec虚拟地址
@@ -163,7 +178,10 @@ usertrapret(void)
   // set S Previous Privilege mode to User.
   unsigned long x = r_sstatus();
   x &= ~SSTATUS_SPP; // clear SPP to 0 for user mode   清除用户态标志
-  x |= SSTATUS_SPIE; // enable interrupts in user mode   // 在最后调用sret返回用户态就隐式的打开中断!!!
+
+  // 这里将sstatus.SPIE = 1. 这样调用sret的时候,
+  // 硬件会自动执行sstatus.SIE = sstatus.SPIE.这样就打开了中断 ,然后硬件会sstatus.SPIE=1代表恢复成功
+  x |= SSTATUS_SPIE; // enable interrupts in user mode  
   w_sstatus(x);
 
   // set S Exception Program Counter to the saved user pc.
@@ -205,6 +223,8 @@ kerneltrap()
   // give up the CPU if this is a timer interrupt.
   // // 场景 2) cpu在执行进程的内核态指令,被定时器中断打断,进入kerneltrap,调用yield 放弃执行进入scheduler
   if(which_dev == 2 && myproc() != 0)
+    // 1)放弃CPU的执行,后最终会通关scheduler调度器yield的下一行c代码,最终完成 回到用户空间
+    // 2) 调用yield 会导致中断被打开 导致 sepc和sstatus被修改.但是为什么 usertrap就不怕呢???
     yield();
 
   // the yield() may have caused some traps to occur,

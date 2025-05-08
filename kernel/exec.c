@@ -137,6 +137,7 @@ exec(char *path, char **argv)
   oldpagetable = p->pagetable;
   p->pagetable = pagetable;  // 这个页表s不会放到 MMU的寄存器中s
   p->sz = sz;
+  // 因为这行代码在内核态,用sret返回用户态的时候,会执行sepc寄存器的地址,也就是trapframe->epc的地址
   p->trapframe->epc = elf.entry;  // initial program counter = main
   p->trapframe->sp = sp; // initial stack pointer
   proc_freepagetable(oldpagetable, oldsz);

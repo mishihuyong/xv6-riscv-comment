@@ -54,6 +54,9 @@
 //  在内核态中，sp 可以认为是一个安全的栈空间，sscratch 便不需要保存任何值。此时将其设为 0，可以在遇到中断时通过 sscratch 中的值判断中断前程序是否处于内核态。
 // https://rcore-os.cn/rCore-Tutorial-deploy/docs/lab-1/guide/part-2.html
 
+// SIE寄存器 精确控制某个中断, sstatus.SIE 是全局中断控制,但是其具有最高权限. sstatus.SPIE会保存是status.SIE的值
+// sstatus.SIE有最高权限, 它是0 就关闭了所有中断. sstatus.SIE=1, SIE=2 则只打开了某个中断, 要是sstatus.SIE=0, SIE=2 则中断全关
+
 // 特殊功能寄存器
 // 除了上述常见的寄存器，还有一些针对特定功能的寄存器，比如计时器、性能计数器等：
 // time：存储处理器的当前时间戳。

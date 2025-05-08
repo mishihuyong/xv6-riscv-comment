@@ -269,7 +269,7 @@ userinit(void)
   p->sz = PGSIZE;
 
   // prepare for the very first "return" from kernel to user.
-  p->trapframe->epc = 0;      // user program counter
+  p->trapframe->epc = 0;      // user program counter //返回用户态的时候就会执行从epc开始的指令
   p->trapframe->sp = PGSIZE;  // user stack pointer // 跟initcode.sS 共享一页？
 
   safestrcpy(p->name, "initcode", sizeof(p->name));
@@ -470,6 +470,10 @@ wait(uint64 addr)
 //  - eventually that process transfers control
 //    via swtch back to the scheduler.
 // 详细细节 在book的7.3 Code: Scheduling 说的很清楚
+
+// scheduler()是调度器执行进程, sched()是放弃进程的执行
+// 大致流程是: 进程在中断或系统调用通过trap进入内核态(这个时候会保存sepc到trapframe->epc),通过sched 放弃执行,存ra到p->context,交给scheduler,
+// scheduler将cpu交给进程, 进程通过ra寄存器回到trap,trap使用trapframe->epc的位置回到用户态指令执行
 void
 scheduler(void)
 {
@@ -481,14 +485,17 @@ scheduler(void)
     // The most recent process to run may have had interrupts
     // turned off; enable them to avoid a deadlock if all
     // processes are waiting. 
-    // 最近运行的进程可能关闭了中断,为了避免所有进程等待进入死锁打开中断
-    // 没看懂这里打开中断, // 还没搞清除SSTATUS_SIE 和 SSTATUS_SPIE 怎么配合的????
+    // 最近运行的进程可能关闭了中断(硬件默认进入trap内核态就关闭了中断),为了避免所有进程等待进入死锁打开中断
     // 什么只在 usertrapret 短暂的关闭了中断,usertrapret调用sret回到用户态的时候就打开了中断,又多次打开中断?????
     intr_on();
 
     int found = 0;
     for(p = proc; p < &proc[NPROC]; p++) {
-      acquire(&p->lock);
+
+      // 1)这个加锁会关闭该CPU的中断. 
+      // 2)被这个CPU的scheduler函数锁住后,其他cpu的scheduler就没法继续执行了
+      // 除非这个锁被释放??? 这个就没法并发了???
+      acquire(&p->lock); 
       if(p->state == RUNNABLE) {
         // Switch to chosen process.  It is the process's job
         // to release its lock and then reacquire it
@@ -500,7 +507,10 @@ scheduler(void)
 
         //执行这个进程 , 将之前的寄存器也就是scheduler()函数的上下文环境存放到c->context
         swtch(&c->context, &p->context);  
-
+        // swtch执行完后就会执行ra开始的指令.其会通过userret的sret回到用户态,继续执行
+        // trapframe->epc里面的用户态指令. 
+        // 而执行e->proc=0 要等到时钟中断yield之类的trap,通过函数schd()函数返回才会执行
+        // 这时proc已经不在cpu中了  所以为0
         // Process is done running for now.
         // It should have changed its p->state before coming back.
         c->proc = 0;  // 没太明白？？
@@ -510,7 +520,6 @@ scheduler(void)
     }
     if(found == 0) {
       // nothing to run; stop running on this core until an interrupt.
-      // 没看懂这里打开中断/ 什么只在 usertrapret 短暂的关闭了中断,usertrapret调用sret回到用户态的时候就打开了中断,又多次打开中断?????
       intr_on();
       asm volatile("wfi");  // 提示cpu可以进入低功耗状态
     }
@@ -577,6 +586,8 @@ forkret(void)
   static int first = 1;
 
   // Still holding p->lock from scheduler.
+
+  // 解锁!!  第一次执行进程,ra是forket会解锁,但是后面随着进程的执行,ra不是forkret后怎么办????
   release(&myproc()->lock);
 
   if (first) {
