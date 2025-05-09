@@ -30,6 +30,9 @@ struct inode {
 };
 
 // map major device number to device functions.
+// 主设备驱动 目前只支持了CONSOLE一种设备
+// unix系统分一个主设备和从设备驱动，主设备可以服务很多硬件，也就是可以共享一个设备驱动程序，
+// 每个设备的区别就用MINOR
 struct devsw {
   int (*read)(int, uint64, int);
   int (*write)(int, uint64, int);
@@ -37,4 +40,4 @@ struct devsw {
 
 extern struct devsw devsw[];
 
-#define CONSOLE 1
+#define CONSOLE 1  // 软件实现的一个设备

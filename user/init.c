@@ -11,15 +11,20 @@
 
 char *argv[] = { "sh", 0 };
 
+// 内核的第一个进程. 然后其会启动sh进程
 int
 main(void)
 {
   int pid, wpid;
 
   if(open("console", O_RDWR) < 0){
-    mknod("console", CONSOLE, 0);
+    // 注册CONSOLE为一个设备类型文件. console也有了inode 也是一个文件了
+    mknod("console", CONSOLE, 0); 
     open("console", O_RDWR);
   }
+
+  // 标准输出 标准错误都指向console
+  // 也就是包含输入在内都指向了console设备
   dup(0);  // stdout
   dup(0);  // stderr
 
@@ -41,6 +46,7 @@ main(void)
       // or if a parentless process exits.
       wpid = wait((int *) 0);
       if(wpid == pid){
+        // sh 退出重启它
         // the shell exited; restart it.
         break;
       } else if(wpid < 0){

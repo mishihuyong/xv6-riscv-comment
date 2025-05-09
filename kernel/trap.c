@@ -23,6 +23,11 @@
 // trapframe包含指向当前进程的内核栈、当前CPU的hartid、usertrap的地址和内核页表的地址的指针，uservec将这些值设置到相应的寄存器中，并将satp切换到内核页表和刷新TLB，然后调用usertrap。
 // usertrap的作用是确定trap的原因，处理它，然后返回（kernel/ trap.c:37）。如上所述，它首先改变stvec，这样在内核中发生的trap将由kernelvec处理。它保存了sepc（用户PC），这也是因为usertrap中可能会有一个进程切换，导致sepc被覆盖。如果trap是系统调用，syscall会处理它；如果是设备中断，devintr会处理；否则就是异常，内核会杀死故障进程。usertrap会把用户pc加4，因为RISC-V在执行系统调用时，会留下指向ecall指令的程序指针[2]。在退出时，usertrap检查进程是否已经被杀死或应该让出CPU（如果这个trap是一个定时器中断）。
 
+// 整理的逻辑是：
+// uservec（汇编）-> usertrap->usertrapret->userret（汇编）sret回到用户态 ->执行sepc
+//               -> registr kernelvec -> kerneltrap  sret回到以前的模式还是内核模式 ->执行sepc
+
+
 struct spinlock tickslock;
 uint ticks;
 
@@ -233,6 +238,8 @@ kerneltrap()
   w_sstatus(sstatus);
 }
 
+
+// 每个cpu有独立时钟源
 void
 clockintr()
 {
@@ -276,6 +283,8 @@ devintr()
     // the PLIC allows each device to raise at most one
     // interrupt at a time; tell the PLIC the device is
     // now allowed to interrupt again.
+    // 一个设备一次同时只能一次中断
+    // 发送complete信号表示可以再次使能同一类型的中断了
     if(irq)
       plic_complete(irq);
 

@@ -23,7 +23,7 @@ swtch:
         sd s10, 96(a0)
         sd s11, 104(a0)
 
-        ld ra, 0(a1)   # 寄存器 用a1（new）的值   // ra可能是forkret. 函数执行完好 就会执行ra里面的指令
+        ld ra, 0(a1)   # 寄存器 用a1（new）的值   // 最开始ra是forkret. 函数执行完好 就会执行ra里面的指令
         ld sp, 8(a1)
         ld s0, 16(a1)
         ld s1, 24(a1)

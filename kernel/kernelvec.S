@@ -61,4 +61,11 @@ kernelvec:
         addi sp, sp, 256
 
         # return to whatever we were doing in the kernel.
-        sret
+        # sret
+        #   1) 恢复 PC：将 sepc 的值写入 PC，跳转回原程序流。
+        #   2)恢复特权级：根据 sstatus.SPP 字段（0=U模式，1=S模式），切换回之前的特权级。
+        #   3)更新 sstatus：
+        #        a) 将 sstatus.SPIE（Supervisor Previous Interrupt Enable）的值写回 sstatus.SIE（恢复中断使能状态）。
+        #        b) 将 sstatus.SPIE 置 1（为下次异常处理做准备）。
+        #        c) 清除 sstatus.SPP（设为 0，表示返回后特权级是 U模式）。
+        sret  

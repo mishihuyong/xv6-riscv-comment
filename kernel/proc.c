@@ -472,8 +472,15 @@ wait(uint64 addr)
 // 详细细节 在book的7.3 Code: Scheduling 说的很清楚
 
 // scheduler()是调度器执行进程, sched()是放弃进程的执行
-// 大致流程是: 进程在中断或系统调用通过trap进入内核态(这个时候会保存sepc到trapframe->epc),通过sched 放弃执行,存ra到p->context,交给scheduler,
-// scheduler将cpu交给进程, 进程通过ra寄存器回到trap,trap使用trapframe->epc的位置回到用户态指令执行
+// 大致流程是: 进程在中断或系统调用通过trap进入内核态(这个时候会保存sepc到trapframe->epc),
+// 通过sched 放弃执行,存ra到p->context,交给scheduler,
+// scheduler将cpu交给进程, 
+// 进程通过ra寄存器回到trap,trap使用trapframe->epc的位置回到用户态指令执行
+// 这样就通过sched scheduler 实现了循环.  trap 实现了用户态和内核态的循环切换
+
+// 进程切换的流层图如下：
+// ecall进入内核态 -> uservec-usertrap -> yield:sched
+// -> scheduler（可能是任意进程） -> 执行ra的地址 -> usertrapret-userret回到用户态 -> 执行sepc的地址（第一次就是forkret）
 void
 scheduler(void)
 {
@@ -485,7 +492,7 @@ scheduler(void)
     // The most recent process to run may have had interrupts
     // turned off; enable them to avoid a deadlock if all
     // processes are waiting. 
-    // 最近运行的进程可能关闭了中断(硬件默认进入trap内核态就关闭了中断),为了避免所有进程等待进入死锁打开中断
+    // 最近运行的进程可能关闭了中断(硬件默认进入trap就关闭了中断),为了避免所有进程等待进入死锁打开中断
     // 什么只在 usertrapret 短暂的关闭了中断,usertrapret调用sret回到用户态的时候就打开了中断,又多次打开中断?????
     intr_on();
 
@@ -493,8 +500,10 @@ scheduler(void)
     for(p = proc; p < &proc[NPROC]; p++) {
 
       // 1)这个加锁会关闭该CPU的中断. 
-      // 2)被这个CPU的scheduler函数锁住后,其他cpu的scheduler就没法继续执行了
-      // 除非这个锁被释放??? 这个就没法并发了???
+      // 2)被这个CPU的scheduler函数锁住后,由于proc[NPROC]是全局的,也就是所有CPU共享,其他cpu的scheduler就没法继续执行了
+      // 除非这个锁被释放??? 除了第一次运行进程的时候快速通过forkret释放了锁,其他情况下也就是进程在一个时间片里,如果其他cpu的scheduler的for循环正好在这个进程上就被停住了??
+      // 为啥不用try lock失败了接着走后面的
+      // 需要等yield->sched回来后释放了锁才能并发.被停在这个lock的进程其他CPU才会运行. 这个并发性不太好
       acquire(&p->lock); 
       if(p->state == RUNNABLE) {
         // Switch to chosen process.  It is the process's job
@@ -511,9 +520,10 @@ scheduler(void)
         // trapframe->epc里面的用户态指令. 
         // 而执行e->proc=0 要等到时钟中断yield之类的trap,通过函数schd()函数返回才会执行
         // 这时proc已经不在cpu中了  所以为0
+
         // Process is done running for now.
         // It should have changed its p->state before coming back.
-        c->proc = 0;  // 没太明白？？
+        c->proc = 0;  
         found = 1;
       }
       release(&p->lock);
@@ -564,7 +574,7 @@ sched(void)
   mycpu()->intena = intena;
 }
 
-// 要求禁用中断调用cpuid和mycpu时，需要禁用中断)
+// 要求禁用中断调用cpuid和mycpu时，需要禁用中断)!!!!!!!!!!
 // Give up the CPU for one scheduling round.
 // 让当前进程放弃在cpu中执行进入scheduler()循环，但是还是runnable 所以进入下个循环会被重新执行。
 void
@@ -579,7 +589,9 @@ yield(void)
 
 // A fork child's very first scheduling by scheduler()
 // will swtch to forkret.
-// 有一种情况是调度器对swtch的调用没有以sched结束。当一个新进程第一次被调度时，它从forkret开始（kernel/proc.c:527）。forkret的存在是为了释放p->lock；否则，新进程需要从usertrapret开始。
+// 有一种情况是调度器对swtch的调用没有以sched结束。当一个新进程第一次被调度时，
+// 它从forkret开始。forkret的存在是为了释放p->lock；
+// 否则，新进程需要从usertrapret开始。
 void
 forkret(void)
 {
@@ -587,7 +599,9 @@ forkret(void)
 
   // Still holding p->lock from scheduler.
 
-  // 解锁!!  第一次执行进程,ra是forket会解锁,但是后面随着进程的执行,ra不是forkret后怎么办????
+  // 解锁!!  第一次执行进程,ra是forket会解锁, 这样会出现多个cpu并发执行
+  // 不同进程的情况.
+  // 但是后面随着进程的执行,ra不是forkret后怎么办????
   release(&myproc()->lock);
 
   if (first) {

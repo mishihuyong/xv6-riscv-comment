@@ -10,6 +10,16 @@
 #include "proc.h"
 #include "defs.h"
 
+// 连接关系:键盘 -> uart -> 屏幕
+
+// 流层图 (uart是双工)::
+
+// 输入: 敲键盘-> usertrap->devintr->uartintr-> uart硬设备:tx缓存 ->consoleintr -> console软设备: console缓存(并同步实时回显) -> sh调用gets读取缓存就得到用户态的键盘输入
+
+// 输出: 用户态printf -> usertrap->sys_write -> consolwrite-> console软设备:console缓存 -> uartputc -> uart硬设备:tx缓存  -> (1) uartstart异步显示 -> 屏幕
+//                                                                                                        键盘输入场景: -> (2) consoleintr -> consputc->uartputc_sync同步显示 -> 屏幕
+
+
 // the UART control registers are memory-mapped
 // at address UART0. this macro returns the
 // address of one of the registers.
@@ -41,7 +51,7 @@
 // the transmit output buffer.
 struct spinlock uart_tx_lock;
 #define UART_TX_BUF_SIZE 32
-char uart_tx_buf[UART_TX_BUF_SIZE];
+char uart_tx_buf[UART_TX_BUF_SIZE]; // 与具体进程解耦不属于任何进程：环形缓冲队列 判空：uart_tx_w == uart_tx_r, 判满：uart_tx_w == uart_tx_r+32
 uint64 uart_tx_w; // write next to uart_tx_buf[uart_tx_w % UART_TX_BUF_SIZE]
 uint64 uart_tx_r; // read next from uart_tx_buf[uart_tx_r % UART_TX_BUF_SIZE]
 
@@ -88,18 +98,22 @@ uartputc(int c)
 {
   acquire(&uart_tx_lock);
 
+  // 内核出现故障，就死循环，程序失去响应
   if(panicked){
     for(;;)
       ;
   }
+
+  // 缓存区满了，让进程休眠在uart_tx_r这个channel上
   while(uart_tx_w == uart_tx_r + UART_TX_BUF_SIZE){
     // buffer is full.
     // wait for uartstart() to open up space in the buffer.
     sleep(&uart_tx_r, &uart_tx_lock);
   }
-  uart_tx_buf[uart_tx_w % UART_TX_BUF_SIZE] = c;
+  // 没满，放入缓存区，告知UART 准备发送
+  uart_tx_buf[uart_tx_w % UART_TX_BUF_SIZE] = c; // 放入缓存
   uart_tx_w += 1;
-  uartstart();
+  uartstart();// 驱动uart芯片发送数据
   release(&uart_tx_lock);
 }
 
@@ -113,6 +127,7 @@ uartputc_sync(int c)
 {
   push_off();
 
+  // 内核故障，死循环不再响应
   if(panicked){
     for(;;)
       ;
@@ -130,6 +145,12 @@ uartputc_sync(int c)
 // in the transmit buffer, send it.
 // caller must hold uart_tx_lock.
 // called from both the top- and bottom-half.
+// 驱动uart芯片向外发送数据
+// usartstart 被两个地方调用：
+// 1） top： uartputc函数 是用户和内核可以调用的接口
+// 2） bottom： uartintr 中断
+
+// 异步发送
 void
 uartstart()
 {
@@ -139,11 +160,12 @@ uartstart()
       ReadReg(ISR);
       return;
     }
-    
+    // 有字符等待发送，但是上次的发送还没完成 
     if((ReadReg(LSR) & LSR_TX_IDLE) == 0){
       // the UART transmit holding register is full,
       // so we cannot give it another byte.
       // it will interrupt when it's ready for a new byte.
+      // uart thr寄存器还是满的 不能给它另外一个byte。等它准备好的时候主动发起中断
       return;
     }
     
@@ -151,6 +173,9 @@ uartstart()
     uart_tx_r += 1;
     
     // maybe uartputc() is waiting for space in the buffer.
+    // 唤醒之前在uart_tx_r地址上进行睡眠等待的锁
+    // 也就是将进程状态该为running，从而进入调度队列；
+    // 对应uartputc中的sleep（由于uart_tx_buf缓冲区满被睡眠了，现在不满就可以开始工作了）
     wakeup(&uart_tx_r);
     
     WriteReg(THR, c);
@@ -159,6 +184,7 @@ uartstart()
 
 // read one input character from the UART.
 // return -1 if none is waiting.
+// 读取uart寄存器的字符
 int
 uartgetc(void)
 {
@@ -173,18 +199,23 @@ uartgetc(void)
 // handle a uart interrupt, raised because input has
 // arrived, or the uart is ready for more output, or
 // both. called from devintr().
+
+// 两种情况会触发uartintr: 1) 输入通道rx满(键盘有数据输入). 2)输出通道tx为空
 void
 uartintr(void)
 {
   // read and process incoming characters.
+  // 读取字符,通道rx为满的中断
   while(1){
     int c = uartgetc();
     if(c == -1)
       break;
+    // 将字符放入console的缓冲区,并回显字符
     consoleintr(c);
   }
 
   // send buffered characters.
+  // 异步发送,对应tx为空的中断
   acquire(&uart_tx_lock);
   uartstart();
   release(&uart_tx_lock);
