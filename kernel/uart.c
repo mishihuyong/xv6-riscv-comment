@@ -19,6 +19,15 @@
 // 输出: 用户态printf -> usertrap->sys_write -> consolwrite-> console软设备:console缓存 -> uartputc -> uart硬设备:tx缓存  -> (1) uartstart异步显示 -> 屏幕
 //                                                                                                        键盘输入场景: -> (2) consoleintr -> consputc->uartputc_sync同步显示 -> 屏幕
 
+// 从上面可以看出 console这个软设备作为uart的影子设备,将其模拟成文件,供用户态程序使用read,write 来IO
+//              display          read
+//                ^               ^
+//                |               |
+// keyboard -->  uart  <--> console(file)
+//                                ^
+//                                |
+//                              write
+                    
 
 // the UART control registers are memory-mapped
 // at address UART0. this macro returns the
