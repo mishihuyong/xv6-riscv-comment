@@ -12,7 +12,7 @@
 
 // 连接关系:键盘 -> uart -> 屏幕
 
-// 流层图 (uart是双工)::
+// 流层图 (uart是双工,且跟进程解耦)::
 
 // 输入: 敲键盘-> usertrap->devintr->uartintr-> uart硬设备:tx缓存 ->consoleintr -> console软设备: console缓存(并同步实时回显) -> sh调用gets读取缓存就得到用户态的键盘输入
 

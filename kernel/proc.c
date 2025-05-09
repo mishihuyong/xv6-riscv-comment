@@ -493,7 +493,12 @@ scheduler(void)
     // turned off; enable them to avoid a deadlock if all
     // processes are waiting. 
     // 最近运行的进程可能关闭了中断(硬件默认进入trap就关闭了中断),为了避免所有进程等待进入死锁打开中断
-    // 什么只在 usertrapret 短暂的关闭了中断,usertrapret调用sret回到用户态的时候就打开了中断,又多次打开中断?????
+    // usertrapret调用sret回到用户态的时候就打开了中断,
+    // 这个地方难:
+    // 1:一个进程使用uartputc因为uart缓存区满而sleep, 它需要等一个uartstart读取让出缓冲区空间来唤醒这个进程
+    // 只有允许中断,才能在uartintr中调用uartstart来清除部分空间.来将这个进程唤醒. 否则这个进程就永远sleep了
+    // 2: 内核的时钟中断会唤醒清空空间的进程吗?kerneltrap在调用yield的时候会判断是不是内核线程在执行(if(which_dev == 2 && myproc() != 0)),
+    // 如果是进程的内核态才会调用yield,如果是内核线程则不会调用yield
     intr_on();
 
     int found = 0;
