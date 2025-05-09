@@ -20,13 +20,13 @@
 //                                                                                                        键盘输入场景: -> (2) consoleintr -> consputc->uartputc_sync同步显示 -> 屏幕
 
 // 从上面可以看出 console这个软设备作为uart的影子设备,将其模拟成文件,供用户态程序使用read,write 来IO
-//              display          read
+//              display        shell:read
 //                ^               ^
 //                |               |
 // keyboard -->  uart  <--> console(file)
 //                                ^
 //                                |
-//                              write
+//                             shell:write
                     
 
 // the UART control registers are memory-mapped
