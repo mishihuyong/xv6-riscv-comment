@@ -48,13 +48,17 @@
 //                                                                                                        键盘输入场景: -> (2) consoleintr -> consputc->uartputc_sync同步显示 -> 屏幕
 
 // 从上面可以看出 console这个软设备作为uart的影子设备,将其模拟成文件,供用户态程序使用read,write 来IO
-//              display        shell:read
-//                ^               ^
-//                |               |
-// keyboard -->  uart  <--> console(file)
-//                                ^
-//                                |
-//                             shell:write
+//     uart只有发送带缓存，响应键盘中断uartintr是不带缓存直接读取的，然后uartintr调用consoleintr写入console的缓存区
+//     console 是写是没有带缓存，是直接写道uart的发送区.  console的read 也是读取的缓存区
+//    
+//
+//              display            shell:read
+//                ^                   ^
+//                |buff               | buff
+//               uart  <-----> buff console(filesys)
+//                ^                   ^
+//                |                   |
+//            keyboard            shell:write
                     
 
 

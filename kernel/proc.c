@@ -531,7 +531,7 @@ scheduler(void)
         c->proc = 0;  
         found = 1;
       }
-      release(&p->lock);
+      release(&p->lock);  // 跨进程释放yield 里面获取的锁， 因为swtch换了执行路径
     }
     if(found == 0) {
       // nothing to run; stop running on this core until an interrupt.
@@ -586,10 +586,10 @@ void
 yield(void)
 {
   struct proc *p = myproc();
-  acquire(&p->lock);
+  acquire(&p->lock); // 获取锁 在scheduler 中释放
   p->state = RUNNABLE;
   sched();
-  release(&p->lock);
+  release(&p->lock); // 跨进程释放 scheduler中获取的锁 不是yield里面的这个锁。因为sched换了执行路径
 }
 
 // A fork child's very first scheduling by scheduler()

@@ -72,8 +72,8 @@
 // 内核布局 基于虚拟地址                         【内核态虚拟地址】
 // Address zero first:
 //  0
-//  clint
-//  plic
+//  clint   // 本地中断（软件中断和定时器中断）
+//  plic    // 外部设备中断
 //  uarto
 //  virtio disk
 //  kernel text
@@ -85,8 +85,8 @@
 // 内核布局 基于物理地址                         【内核态物理地址】
 // Address zero first:                    
 //  0
-//  clint
-//  plic
+//  clint // 本地设备中断（软件中断和定时器中断
+//  plic  // 外部全局中断
 //  uarto
 //  virtio disk
 //  kernel text //包含trampoline
