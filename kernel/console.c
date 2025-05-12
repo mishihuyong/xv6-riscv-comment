@@ -55,8 +55,8 @@
 //              display            shell:read
 //                ^                   ^
 //                |buff               | buff
-//               uart  <-----> buff console(filesys)
-//                ^                   ^
+//               uart  -----> buff console(filesys)
+//                ^    <-----         ^
 //                |                   |
 //            keyboard            shell:write
                     
