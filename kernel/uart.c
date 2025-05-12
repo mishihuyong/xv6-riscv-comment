@@ -26,11 +26,11 @@
 //    
 //
 //              display            shell:read
-//                ^                   ^
-//                |buff               | buff
+//               ^ ^                   ^
+//               | |buff               | buff
 //               uart  -----> buff console(filesys)
-//                ^    <-----         ^
-//                |                   |
+//                ^    <----------     ^
+//                |                    |
 //            keyboard            shell:write
                     
 
