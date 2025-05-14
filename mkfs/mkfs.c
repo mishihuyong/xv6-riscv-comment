@@ -5,6 +5,19 @@
 #include <fcntl.h>
 #include <assert.h>
 
+// 创建磁盘空间系统
+// structure of the xv6 filesystem:
+// boot | super | log | inodes | bitmap | data .... data
+//  0      1       2
+// 创建2000*11024 bytes的磁盘，每个块1024， 每个扇区1024
+// 1. boot分区栈用一个block，启动引导使用
+// 2. super一个block，超级块，存放各个分区的信息，如：大小，起始块号
+// 3. log分区栈用30个block，给操作系统
+// 4. indoes分区占用13个block，具体的目录，文件 struct inode存在者
+// 5. bitmap一个block，
+// 6. 剩下的都是data
+// 参考 https://blog.csdn.net/qq_40877617/article/details/135410839
+
 #define stat xv6_stat  // avoid clash with host struct stat
 #include "kernel/types.h"
 #include "kernel/fs.h"
