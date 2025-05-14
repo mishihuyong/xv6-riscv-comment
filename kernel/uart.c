@@ -25,14 +25,13 @@
 //     console 是写是没有带缓存，是直接写道uart的发送区.  console的read 也是读取的缓存区
 //    
 //
-//              display            shell:read
-//               ^ ^                   ^
-//               | |buff               | buff
-//               uart  -----> buff console(filesys)
-//                ^    <----------     ^
-//                |                    |
-//            keyboard            shell:write
-                    
+//              display                  shell:read
+//               ^ ^                          ^
+//               | |buff                      | buff
+//               uart  ----------> buff console(filesys)
+//                ^    <----------            ^
+//                |                           |
+//            keyboard(同步实时回显)      shell:write (其不写入console的缓存，而是最后写入到uart的tx缓存，然后异步显示)
 
 // the UART control registers are memory-mapped
 // at address UART0. this macro returns the

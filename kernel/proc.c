@@ -528,10 +528,11 @@ scheduler(void)
 
         // Process is done running for now.
         // It should have changed its p->state before coming back.
+        // schd()函数回到这里
         c->proc = 0;  
         found = 1;
       }
-      release(&p->lock);  // 跨进程释放yield 里面获取的锁， 因为swtch换了执行路径
+      release(&p->lock);  // 跨进程（也可能是本进程）释放yield 里面获取的锁， 因为swtch换了执行路径等schd()函数回来 p已经换了
     }
     if(found == 0) {
       // nothing to run; stop running on this core until an interrupt.
@@ -540,6 +541,32 @@ scheduler(void)
     }
   }
 }
+
+
+
+// 第1次执行进程:
+// ecall -> fork -> exec p1 ->
+// scheduler: acquire p1-> swtch( -> p1) -> 执行ra里面的forkret -> release p1  ->
+// userret 执行用户态程序 ->被中断打断
+// yield： acquire p1-> swtch(-> scheduler) -> 回到 scheduler里的swtch的下一行代码：执行release p1
+
+// 后面第1+n(n=0,1..)次执行进程
+// 最大的不同是调用scheduler切换到p1进程不会从forkret开始执行unlock p1. 
+// 而是执行yield: swtch的下一行代码：release。因为yield调用swtch切换到scheduler后，ra就是yield:swtch的下一行代码，回来就从ra开始。
+
+// scheduler 里面最开始执行 acquire，其是在，yield里release的：
+// yield(void)                                  scheduler()                                    yield(void)   
+// {                                            {                                              {
+//   struct proc *p = myproc();                   for(proc[NPROC])                               struct proc *p = myproc(); 
+//   acquire(&p->lock);       ------                acquire(&p->lock);    --------------         acquire(&p->lock);       
+//   p->state = RUNNABLE;          |                p->state = RUNNING;                |         p->state = RUNNABLE; 
+//   sched();                      |                swtch(&c->context, &p->context);   |         sched();
+//   release(&p->lock);            ----->>          release(&p->lock);                 ------>>  release(&p->lock);  
+// }                                            }                                              }
+// 如上图所示假设这种场景：
+//  1.最开始 p11 调用yield(acquire p11)退出执行进入scheduler， proc[NPROC]数组下一个进程是P22, acquire p22, 切换到p22执行
+//  2.由于P22不是第1次执行，就会执行yield:sched(从这里把P22切换出去的)的下一行ra寄存器的release p22
+//  3.等p22 被中断打断执行yield (acquire p22) 就是步骤1。 死循环
 
 // Switch to scheduler.  Must hold only p->lock
 // and have changed proc->state. Saves and restores
@@ -589,7 +616,8 @@ yield(void)
   acquire(&p->lock); // 获取锁 在scheduler 中释放
   p->state = RUNNABLE;
   sched();
-  release(&p->lock); // 跨进程释放 scheduler中获取的锁 不是yield里面的这个锁。因为sched换了执行路径
+  // 前面sched换了执行路径，等scheduler回到这里，releae 释放的是scheduler里面的进程的锁
+  release(&p->lock); // 跨进程（也可能是本进程）释放 scheduler中获取的锁 不是yield里面的这个锁。因为sched换了执行路径
 }
 
 // A fork child's very first scheduling by scheduler()

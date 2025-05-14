@@ -2,6 +2,8 @@
         # and causes each hart (i.e. CPU) to jump there.
         # kernel.ld causes the following code to
         # be placed at 0x80000000.
+
+        # 这个文件就是定义各个cpu的内核栈stack0 然后跳转到start.c
 .section .text
 .global _entry
 _entry: 
