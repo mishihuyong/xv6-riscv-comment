@@ -10,6 +10,8 @@ xv6的阅读顺序:
 6. 驱动: ... 难度: 中高(需要硬件知识,并发,配合中断,文件系统xv6只有一个软设备console,其会被注册成设备文件) // 参考: https://blog.csdn.net/zzy980511/article/details/131288968
 7. user目录: .... 难度: 低(其会涉及一些OS的第一个进程 init)
 
+可以参考：https://geekdaxue.co/read/shengruozhimu@ee5908/iglgrt
+
 xv6 is a re-implementation of Dennis Ritchie's and Ken Thompson's Unix
 Version 6 (v6).  xv6 loosely follows the structure and style of v6,
 but is implemented for a modern RISC-V multiprocessor using ANSI C.

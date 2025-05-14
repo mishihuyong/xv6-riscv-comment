@@ -42,10 +42,10 @@
 
 // 监督模式下的 CSR：
 // sstatus（监督模式状态寄存器）：类似于mstatus，但用于监督模式。sstatus中的SIE位控制设备中断是否被启用，如果内核清除SIE，RISC-V将推迟设备中断，直到内核设置SIE。SPP位表示trap是来自用户模式还是supervisor模式，并控制sret返回到什么模式。
-// sepc（监督异常程序计数器）：保存监督模式下的异常地址。当trap发生时，RISC-V会将程序计数器保存在这里（因为PC会被stvec覆盖）。sret（从trap中返回）指令将sepc复制到pc中。内核可以写sepc来控制sret的返回到哪里
+// sepc（监督异常程序计数器）：保存监督模式下的异常s地址。当trap发生时，RISC-V会将程序计数器保存在这里（因为PC会被stvec覆盖）。sret（从trap中返回）指令将sepc复制到pc中。内核可以写sepc来控制sret的返回到哪里
 // scause（监督异常原因寄存器）：保存监督模式下的异常原因。RISC -V在这里放了一个数字，描述了trap的原因。
 // stval（Supervisor Trap Value）寄存器 是 RISC-V 架构中与异常（trap）处理相关的关键寄存器之一，属于监督者模式（S-Mode）下的特权寄存器。它主要用于存储触发异常的附加信息，帮助操作系统更精准地诊断和处理异常。例如:缺页异常（Page Fault）：存储导致缺页的虚拟地址。
-// stvec（监督陷阱向量基址寄存器）：指向监督模式异常处理程序的入口地址。内核在这里写下trap处理程序的地址；RISC-V跳转到这里来处理trap。
+// stvec（监督陷阱向量基址寄存器）：指向监督模式异常处理程序的入口地址。异常返回地址在sepc.内核在这里写下trap处理程序的地址；RISC-V跳转到这里来处理trap。
 // satp（监督地址转换与保护寄存器）：用于监督模式下的虚拟内存管理，控制页表基地址。  kvminithart会用它
 // sscratch
 // （这个寄存器的用处会在实现线程时起到作用，目前仅了解即可）
@@ -63,6 +63,17 @@
 // cycle：记录处理器周期数。
 // instret：记录执行的指令数。
 // 寄存器的操作与管理
+
+riscv的栈结构
+ra: 返回地址，caller使用call 就会存下call的下一行地址在ra中
+fp: 存储 caller的栈帧
+参数：
+局部变量：
+ra:
+fp:
+参数：
+局部变量：
+
 
 
 // which hart (core) is this?
