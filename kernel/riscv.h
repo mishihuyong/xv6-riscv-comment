@@ -64,15 +64,24 @@
 // instret：记录执行的指令数。
 // 寄存器的操作与管理
 
-riscv的栈结构
-ra: 返回地址，caller使用call 就会存下call的下一行地址在ra中
-fp: 存储 caller的栈帧
-参数：
-局部变量：
-ra:
-fp:
-参数：
-局部变量：
+// ra 存函数调用【caller call callee】的 caller的返回地址，sepc 存陷阱(异常，中断，ecall)的stvec的返回地址
+
+// riscv的栈结构:
+//        <---|
+// ra:        |          返回地址，caller使用call 就会存下call的下一行地址在ra中
+// fp:        |          存储 该callee的caller的栈帧基址
+// a0,an      |          参数
+// an+1,..    |          局部变量
+//        <===|===|
+// ra:        |   |
+// fp:   -----|   |
+// a0,an          |
+// an+1,..        |
+//                |
+// ra:            |
+// fp:   =========|
+// a0,an 
+// an+1,..
 
 
 
