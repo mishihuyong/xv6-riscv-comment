@@ -595,7 +595,7 @@ sched(void)
 
   if(!holding(&p->lock))  // 判断当前cpu是否得到了这个进程
     panic("sched p->lock");
-  if(mycpu()->noff != 1)
+  if(mycpu()->noff != 1)  // 除了持有进程的锁，其他的睡眠锁，等等都不允许持有，否则会死锁！！！
     panic("sched locks");
   if(p->state == RUNNING)  // 当前进程是runing状态 
     panic("sched running"); // 不应该调用sched？？
