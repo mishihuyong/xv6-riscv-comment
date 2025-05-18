@@ -53,7 +53,7 @@ trapinithart(void)
 
 // handle an interrupt, exception, or system call from user space.
 // called from trampoline.S
-// 用户态陷阱处理程序：
+// 用户态陷阱处理程序： rivcv 进入trap会将sstatus的SIE 保存到SPIE,然后SIE=0关闭中断
 // 设置内核vec； 保存异常开始时候的PC
 // 1）读取scause寄存器如果是系统调用，如果用户态进程被标记为killed，zombie，释放资源。调用系统调用
 // 2）如果是定时器和外设中断 啥都不用做
@@ -81,7 +81,7 @@ usertrap(void)
   // save user program counter.
   // process 最开始的 exec里 epc是main, 后面执行后epc变了
   // 异常发生时硬件会把异常之前的地址存在sepc。 而不是现在的指令 epc=r_sepc赋值指令
-  // 原因:这是因为usertrap中可能会有一个进程切换，导致sepc被覆盖。所以要把现在的process的epc存下来
+  // 原因:这是因为usertrap中可能会有一个进程切换(定时器中断的yield)，导致sepc被覆盖。所以要把现在的process的epc存下来
   // 以免yield 切换后 恢复错误的epc
   p->trapframe->epc = r_sepc(); 
   
@@ -109,9 +109,12 @@ usertrap(void)
     // an interrupt will change sepc, scause, and sstatus,
     // so enable only now that we're done with those registers.
     // 一次中断会修改 sepc,scuase,sstatus, 所以我们将这些寄存器处理完后才打开中断(前面urertrapret关闭了中断)
-    intr_on(); //  // 没看懂这里打开中断  为什么只在 usertrapret 短暂的关闭了中断,usertrapret调用sret回到用户态的时候就打开了中断,又多次打开中断?????
+    // 硬件在进入trap时会自动关闭中断，这里在系统调用时打开中断，为什么异常和中断进入，就不需要开中断呢？
+    // 由于这里是系统调用，不是中断,所以不会中断嵌套。需要打开中断。
+    // 我认为如果不打开中断，如果系统调用的内核函数锁住了某个设备，会造成死锁。那异常呢？
+    intr_on(); 
 
-    // 调用对应的系统调用,返回值保存在trapfram->a0. 返回到用户态的时候,c函数调用会将这个a0作为返回值
+    // 调用对应的系统调用(比如fork, open,sleep等),返回值保存在trapfram->a0. 返回到用户态的时候,c函数调用会将这个a0作为返回值
     // 特别的:  fork 的子进程 是直接赋值a0
     syscall();  
   } else if((which_dev = devintr()) != 0){  // 定时器和外设中断 调用devintr
