@@ -112,6 +112,7 @@ usertrap(void)
     // 硬件在进入trap时会自动关闭中断，这里在系统调用时打开中断，为什么异常和中断进入，就不需要开中断呢？
     // 由于这里是系统调用，不是中断,所以不会中断嵌套。需要打开中断。
     // 我认为如果不打开中断，如果系统调用的内核函数锁住了某个设备，会造成死锁。那异常呢？
+    // 异常走exit(-1) 也会调用schd函数切换到scheduler函数导致中断被打开
     intr_on(); 
 
     // 调用对应的系统调用(比如fork, open,sleep等),返回值保存在trapfram->a0. 返回到用户态的时候,c函数调用会将这个a0作为返回值
@@ -127,7 +128,7 @@ usertrap(void)
   }
 
   if(killed(p))//  只有在系统调用kill和 异常处理才会标记killed，这里应该是处理异常的标记。系统调用的killed标记在前面已经处理
-    exit(-1);  // 释放进程资源 标记状态为 zombie，调用进程切换
+    exit(-1);  // 释放进程资源 标记状态为 zombie，调用进程切换，导致中断被打开
 
   // give up the CPU if this is a timer interrupt.
   if(which_dev == 2)  // 如果是定时器中断，要切换下

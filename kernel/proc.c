@@ -411,7 +411,7 @@ exit(int status)
   release(&wait_lock);
 
   // Jump into the scheduler, never to return.
-  sched();
+  sched(); // 切换到scheduler函数
   panic("zombie exit");
 }
 
@@ -738,6 +738,7 @@ kill(int pid)
 
 
 // 只有在系统调用kill和 usertrap异常处理才会标记killed，
+// 进程释放是一个lazy的实现方式，让其自然退出
 void
 setkilled(struct proc *p)
 {

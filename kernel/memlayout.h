@@ -59,7 +59,7 @@
 #define TRAPFRAME (TRAMPOLINE - PGSIZE)   // 这个地址只在进程的用户态的时候有，其他情况下没有这个东西
 
 
-// 用户进程的布局 虚拟地址：User memory layout.  【用户态虚拟地址】
+// 用户进程的布局 虚拟地址：User memory layout.  【每个用户进程的虚拟地址】
 // Address zero first:
 //   text
 //   original data and bss
