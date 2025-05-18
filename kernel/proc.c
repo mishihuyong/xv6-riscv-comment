@@ -328,6 +328,7 @@ fork(void)
   // Cause fork to return 0 in the child.
   //  如果是在child进程里， fork返回的是a0的值 也就是0
   // 当child进程在cpu中执行,返回用户态,a0就会成为c函数fork的返回值
+  // 这里用a0是因为这个是在parent的内核态fork函数中,如果是child的内核态也可以return 0；
   np->trapframe->a0 = 0;
 
   // increment reference counts on open file descriptors.
@@ -349,10 +350,11 @@ fork(void)
   acquire(&np->lock);
   np->state = RUNNABLE;
   release(&np->lock);
-
-  return pid; // parent 进程 FORK返回子进程的PID。如果swtch切到这个进程,返回用户态c函数fork调用 a0 就会是这个pid（编译器编译的时候默认就会这样编）
+  
+  // parent 进程 FORK返回子进程的PID。如果swtch切到这个进程,返回用户态c函数fork调用 a0 就会是这个pid（编译器编译的时候默认就会这样编）
+  // 由于fork当前处于parent进程的内核态，直接return 即可
+  return pid; 
 }
-
 // Pass p's abandoned children to init.
 // Caller must hold wait_lock.
 void
